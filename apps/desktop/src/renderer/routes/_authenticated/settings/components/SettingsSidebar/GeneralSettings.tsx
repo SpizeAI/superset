@@ -7,6 +7,7 @@ import {
 	HiOutlineCreditCard,
 	HiOutlineDevicePhoneMobile,
 	HiOutlineKey,
+	HiOutlineMicrophone,
 	HiOutlinePaintBrush,
 	HiOutlinePuzzlePiece,
 	HiOutlineShieldCheck,
@@ -34,6 +35,7 @@ type SettingsRoute =
 	| "/settings/billing"
 	| "/settings/devices"
 	| "/settings/api-keys"
+	| "/settings/voice"
 	| "/settings/permissions";
 
 interface SectionItem {
@@ -99,6 +101,13 @@ const SECTION_GROUPS: SectionGroup[] = [
 				section: "terminal",
 				label: "Terminal",
 				icon: <HiOutlineCommandLine className="h-4 w-4" />,
+			},
+			{
+				id: "/settings/voice",
+				section: "voice",
+				label: "Voice Control",
+				icon: <HiOutlineMicrophone className="h-4 w-4" />,
+				macOnly: true,
 			},
 		],
 	},
