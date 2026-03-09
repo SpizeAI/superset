@@ -5,6 +5,11 @@ import type {
 	VoiceLatencyEvent,
 	VoicePipelineState,
 } from "../types";
+import {
+	ConversationWindow,
+	isAffirmativeUtterance,
+	type PendingIntent,
+} from "./conversation-window";
 
 export type PipelineEventType =
 	| "state-change"
@@ -29,6 +34,7 @@ export interface VoicePipelineDeps {
 	speak: (text: string) => Promise<void>;
 	speakStreaming: (sentence: string) => Promise<void>;
 	cancel: () => void;
+	executeConfirmedTrace?: (intent: PendingIntent) => Promise<VoiceAgentResponse>;
 }
 
 /**
@@ -54,6 +60,7 @@ export class VoicePipeline {
 	private deps: VoicePipelineDeps | null = null;
 	private conversationTimer: ReturnType<typeof setTimeout> | null = null;
 	private conversationTimeoutMs = VOICE_CONSTANTS.VAD_SILENCE_WAKE_MS * 5;
+	private readonly confirmationWindow = new ConversationWindow();
 
 	onEvent(handler: PipelineEventHandler): () => void {
 		this.handlers.push(handler);
@@ -149,6 +156,34 @@ export class VoicePipeline {
 			latency.sttFinalMs = Date.now();
 			this.emit("transcript-ready", text);
 
+			// ── Check for pending destructive confirmation ───────────────
+			const pendingConfirmation = this.tryConfirmDestructive(text);
+			if (pendingConfirmation !== undefined) {
+				if (!this.isCycleCurrent(cycle)) return;
+
+				if (pendingConfirmation) {
+					const response = pendingConfirmation;
+					this.transitionTo("speaking");
+					await this.deps.speak(response.text);
+					this.emit("response-ready", response);
+					this.conversationContext.push(`User: ${text}`);
+					this.conversationContext.push(`Assistant: ${response.text}`);
+					this.conversationExchanges++;
+					if (this.isCycleCurrent(cycle)) {
+						this.openConversationalWindow();
+					}
+				} else {
+					this.transitionTo("speaking");
+					await this.deps.speak("Cancelled.");
+					this.conversationContext.push(`User: ${text}`);
+					this.conversationContext.push("Assistant: Cancelled.");
+					this.confirmationWindow.clearPendingIntent();
+					this.openConversationalWindow();
+				}
+				return;
+			}
+
+			// ── Normal processing path ──────────────────────────────────
 			this.transitionTo("thinking");
 			const response = await this.deps.processUtterance(
 				text,
@@ -186,6 +221,45 @@ export class VoicePipeline {
 	}
 
 	/**
+	 * Check if the utterance is a confirmation/denial of a pending
+	 * destructive trace. Returns:
+	 * - VoiceAgentResponse if confirmed and executed
+	 * - null if denied (user said no)
+	 * - undefined if no pending intent exists (normal flow)
+	 */
+	private tryConfirmDestructive(
+		text: string,
+	): Promise<VoiceAgentResponse> | null | undefined {
+		if (!this.confirmationWindow.hasPendingIntent()) return undefined;
+
+		const intent = this.confirmationWindow.getPendingIntent();
+		if (!intent) return undefined;
+
+		if (isAffirmativeUtterance(text)) {
+			const confirmed = this.confirmationWindow.confirmIntent(intent.token);
+			if (confirmed && this.deps?.executeConfirmedTrace) {
+				return this.deps.executeConfirmedTrace(confirmed);
+			}
+			return null;
+		}
+
+		// Non-affirmative response to a pending intent = denial
+		return null;
+	}
+
+	/**
+	 * Register a pending destructive trace intent.
+	 * Called by the voice daemon when a destructive trace match is found.
+	 */
+	setPendingTraceIntent(
+		traceId: string,
+		action: string,
+		args: Record<string, unknown>,
+	): PendingIntent {
+		return this.confirmationWindow.createTraceIntent(traceId, action, args);
+	}
+
+	/**
 	 * Open a conversational window where follow-up utterances don't need
 	 * the wake word. Times out after conversationTimeoutMs of silence.
 	 */
@@ -212,6 +286,7 @@ export class VoicePipeline {
 		this.clearConversationTimer();
 		this.conversationContext = [];
 		this.conversationExchanges = 0;
+		this.confirmationWindow.clearPendingIntent();
 		this.transitionTo("listening-for-wake");
 		this.bindWakeDetection();
 	}

@@ -6,6 +6,23 @@ export interface PendingIntent {
 	args: Record<string, unknown>;
 	createdAt: number;
 	expiresAt: number;
+	traceId?: string;
+}
+
+const AFFIRMATIVE_PATTERNS = [
+	"yes", "yeah", "yep", "yup", "sure", "okay", "ok",
+	"do it", "go ahead", "confirm", "proceed", "approved",
+	"that's right", "correct", "affirmative",
+];
+
+/**
+ * Check if an utterance is an affirmative confirmation.
+ */
+export function isAffirmativeUtterance(text: string): boolean {
+	const normalized = text.toLowerCase().trim().replace(/[.!?,]/g, "");
+	return AFFIRMATIVE_PATTERNS.some(
+		(p) => normalized === p || normalized.startsWith(`${p} `),
+	);
 }
 
 /**
@@ -111,6 +128,21 @@ export class ConversationWindow {
 		};
 
 		return this.pendingIntent;
+	}
+
+	/**
+	 * Create a pending intent for a destructive trace execution.
+	 * The intent stores the trace ID so the pipeline can replay
+	 * the trace after confirmation instead of re-running Claude.
+	 */
+	createTraceIntent(
+		traceId: string,
+		action: string,
+		args: Record<string, unknown>,
+	): PendingIntent {
+		const intent = this.createPendingIntent(action, args);
+		intent.traceId = traceId;
+		return intent;
 	}
 
 	/**
