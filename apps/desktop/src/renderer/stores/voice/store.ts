@@ -2,12 +2,25 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 
+interface TraceMetricsState {
+	traceHits: number;
+	traceMisses: number;
+	guardFailures: number;
+	traceErrors: number;
+	claudeFallbacks: number;
+	totalRequests: number;
+}
+
 interface VoiceState {
 	pipelineState: string;
 	enabled: boolean;
+	traceKillSwitch: boolean;
+	metrics: TraceMetricsState;
 
 	setPipelineState: (state: string) => void;
 	setEnabled: (enabled: boolean) => void;
+	setTraceKillSwitch: (active: boolean) => void;
+	setMetrics: (metrics: TraceMetricsState) => void;
 }
 
 export const useVoiceStore = create<VoiceState>()(
@@ -15,9 +28,20 @@ export const useVoiceStore = create<VoiceState>()(
 		(set) => ({
 			pipelineState: "idle",
 			enabled: false,
+			traceKillSwitch: false,
+			metrics: {
+				traceHits: 0,
+				traceMisses: 0,
+				guardFailures: 0,
+				traceErrors: 0,
+				claudeFallbacks: 0,
+				totalRequests: 0,
+			},
 
 			setPipelineState: (pipelineState) => set({ pipelineState }),
 			setEnabled: (enabled) => set({ enabled }),
+			setTraceKillSwitch: (traceKillSwitch) => set({ traceKillSwitch }),
+			setMetrics: (metrics) => set({ metrics }),
 		}),
 		{ name: "VoiceStore" },
 	),
@@ -42,3 +66,7 @@ export const useVoicePipelineState = () =>
 	useVoiceStore((state) => state.pipelineState);
 export const useIsVoiceEnabled = () =>
 	useVoiceStore((state) => state.enabled);
+export const useTraceMetrics = () =>
+	useVoiceStore((state) => state.metrics);
+export const useTraceKillSwitch = () =>
+	useVoiceStore((state) => state.traceKillSwitch);

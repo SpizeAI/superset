@@ -1,6 +1,7 @@
 import {
 	type VoiceAgentResponse,
 	type VoiceConfig,
+	type ExecutionPath,
 	VoiceAgent,
 	FallbackHandler,
 	VoicePipeline,
@@ -9,6 +10,15 @@ import {
 	DEFAULT_VOICE_CONFIG,
 } from "@superset/voice";
 import type { CachedAgentState, ProactiveAlert } from "@superset/voice";
+
+export interface TraceMetrics {
+	traceHits: number;
+	traceMisses: number;
+	guardFailures: number;
+	traceErrors: number;
+	claudeFallbacks: number;
+	totalRequests: number;
+}
 
 export interface VoiceDaemonDeps {
 	getConfig: () => VoiceConfig;
@@ -45,6 +55,15 @@ export class VoiceDaemon {
 	private running = false;
 	private unsubAlert: (() => void) | null = null;
 	private statusListeners: Array<(state: string) => void> = [];
+	private traceKillSwitch = false;
+	private metrics: TraceMetrics = {
+		traceHits: 0,
+		traceMisses: 0,
+		guardFailures: 0,
+		traceErrors: 0,
+		claudeFallbacks: 0,
+		totalRequests: 0,
+	};
 
 	constructor(deps: VoiceDaemonDeps) {
 		this.deps = deps;
@@ -68,7 +87,12 @@ export class VoiceDaemon {
 		// Initialize Claude agent if API key available
 		const apiKey = this.deps.getApiKey();
 		if (apiKey) {
-			this.agent = new VoiceAgent({ apiKey });
+			this.agent = new VoiceAgent({
+				apiKey,
+				traceEnabled: config.voiceTraceEnabled && !this.traceKillSwitch,
+				traceMaxEntries: config.voiceTraceMaxEntries,
+				traceTtlMs: config.voiceTraceTtlMs,
+			});
 		}
 
 		// Wire pipeline dependencies
@@ -83,13 +107,20 @@ export class VoiceDaemon {
 			cancel: this.deps.cancel,
 		});
 
-		// Forward pipeline state changes to status listeners
+		// Forward pipeline state changes and track trace metrics
 		this.pipeline.onEvent((event, data) => {
 			if (event === "state-change") {
 				const { to } = data as { from: string; to: string };
 				for (const listener of this.statusListeners) {
 					listener(to);
 				}
+			}
+			if (event === "response-ready") {
+				const response = data as VoiceAgentResponse;
+				console.log(
+					`[voice:daemon] Response via ${response.executionPath} in ${response.durationMs}ms` +
+						(response.traceId ? ` (trace: ${response.traceId})` : ""),
+				);
 			}
 		});
 
@@ -141,29 +172,74 @@ export class VoiceDaemon {
 		};
 	}
 
+	/**
+	 * Get current trace metrics for observability.
+	 */
+	getMetrics(): TraceMetrics {
+		return { ...this.metrics };
+	}
+
+	/**
+	 * Enable/disable the trace kill-switch.
+	 * When enabled, all utterances go through Claude regardless of trace matches.
+	 */
+	setTraceKillSwitch(disabled: boolean): void {
+		this.traceKillSwitch = disabled;
+		if (disabled) {
+			console.warn("[voice:daemon] Trace kill-switch activated — Claude-only mode");
+			this.agent?.clearTraces();
+		} else {
+			console.log("[voice:daemon] Trace kill-switch deactivated — traces re-enabled");
+		}
+	}
+
+	isTraceKillSwitchActive(): boolean {
+		return this.traceKillSwitch;
+	}
+
 	private async handleUtterance(
 		text: string,
 		conversationContext: string[],
 	): Promise<VoiceAgentResponse> {
+		this.metrics.totalRequests++;
 		const cachedState = this.deps.getCachedState() ?? undefined;
 
 		// Try Claude agent first, fall back to pattern matcher
 		if (this.agent) {
 			try {
-				return await this.agent.processUtterance(
+				const response = await this.agent.processUtterance(
 					text,
 					conversationContext,
 					cachedState,
 				);
+				this.recordExecutionPath(response.executionPath);
+				return response;
 			} catch (error) {
 				console.warn(
 					"[voice:daemon] Claude agent failed, using fallback:",
 					error,
 				);
+				this.metrics.claudeFallbacks++;
 			}
 		}
 
-		return this.fallbackHandler.processUtterance(text, cachedState);
+		const response = this.fallbackHandler.processUtterance(text, cachedState);
+		this.recordExecutionPath(response.executionPath);
+		return response;
+	}
+
+	private recordExecutionPath(path: ExecutionPath): void {
+		switch (path) {
+			case "trace":
+				this.metrics.traceHits++;
+				break;
+			case "claude":
+				this.metrics.traceMisses++;
+				break;
+			case "fallback":
+				this.metrics.claudeFallbacks++;
+				break;
+		}
 	}
 
 	private handleAlert(alert: ProactiveAlert): void {
