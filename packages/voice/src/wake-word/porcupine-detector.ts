@@ -33,6 +33,10 @@ export class PorcupineDetector {
 	}
 
 	async init(): Promise<void> {
+		if (this.porcupine) {
+			this.porcupine.release();
+			this.porcupine = null;
+		}
 		this.porcupine = await createPorcupine(this.options);
 	}
 

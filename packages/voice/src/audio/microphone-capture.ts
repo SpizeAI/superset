@@ -1,7 +1,6 @@
 import { VOICE_CONSTANTS } from "../config";
 
 export interface MicrophoneCaptureOptions {
-	sampleRate?: number;
 	frameLength?: number;
 	deviceIndex?: number;
 }
@@ -19,13 +18,10 @@ export class MicrophoneCapture {
 	private recorder: PvRecorderLike | null = null;
 	private frameHandlers: FrameHandler[] = [];
 	private running = false;
-	private readonly sampleRate: number;
 	private readonly frameLength: number;
 	private readonly deviceIndex: number;
 
 	constructor(options: MicrophoneCaptureOptions = {}) {
-		this.sampleRate =
-			options.sampleRate ?? VOICE_CONSTANTS.AUDIO_SAMPLE_RATE;
 		this.frameLength =
 			options.frameLength ?? VOICE_CONSTANTS.AUDIO_FRAME_LENGTH;
 		this.deviceIndex = options.deviceIndex ?? -1;
@@ -40,12 +36,17 @@ export class MicrophoneCapture {
 
 	async start(): Promise<void> {
 		if (this.running) return;
-
-		this.recorder = await createPvRecorder(
-			this.frameLength,
-			this.deviceIndex,
-		);
 		this.running = true;
+
+		try {
+			this.recorder = await createPvRecorder(
+				this.frameLength,
+				this.deviceIndex,
+			);
+		} catch (error) {
+			this.running = false;
+			throw error;
+		}
 		this.recorder.start();
 		this.captureLoop();
 	}
@@ -83,17 +84,22 @@ export class MicrophoneCapture {
 		const MAX_RETRIES = 3;
 
 		for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-			try {
-				if (this.recorder) {
-					try {
-						this.recorder.stop();
-						this.recorder.release();
-					} catch {
-						// Ignore cleanup errors during recovery
-					}
-				}
+			if (!this.running) return;
 
+			if (this.recorder) {
+				try {
+					this.recorder.stop();
+					this.recorder.release();
+				} catch {
+					// Ignore cleanup errors during recovery
+				}
+				this.recorder = null;
+			}
+
+			try {
 				await sleep(BACKOFF_MS * (attempt + 1));
+				if (!this.running) return;
+
 				this.recorder = await createPvRecorder(
 					this.frameLength,
 					this.deviceIndex,
@@ -110,6 +116,7 @@ export class MicrophoneCapture {
 		}
 
 		console.error("[voice:mic] All recovery attempts failed, stopping capture");
+		this.recorder = null;
 		this.running = false;
 	}
 }
