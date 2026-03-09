@@ -5,11 +5,22 @@ import type {
 	VoiceAgentTools,
 } from "../types";
 import { isDestructiveTool, toClaudeTools } from "./tools";
+import { TraceIndex } from "./tool-trace/trace-index";
+import {
+	TraceCompiler,
+	type TranscriptRecord,
+	type ToolCallRecord,
+} from "./tool-trace/trace-compiler";
+import { GuardEvaluator } from "./tool-trace/guard-evaluator";
+import { TraceRunner } from "./tool-trace/trace-runner";
 
 export interface VoiceAgentOptions {
 	apiKey: string;
 	model?: string;
 	maxToolCalls?: number;
+	traceEnabled?: boolean;
+	traceMaxEntries?: number;
+	traceTtlMs?: number;
 }
 
 interface ClaudeMessage {
@@ -51,14 +62,33 @@ export class VoiceAgent {
 	private readonly maxToolCalls: number;
 	private tools: VoiceAgentTools | null = null;
 
+	// Trace fast-path components
+	private readonly traceEnabled: boolean;
+	private readonly traceIndex: TraceIndex;
+	private readonly traceCompiler: TraceCompiler;
+	private readonly guardEvaluator: GuardEvaluator;
+	private readonly traceRunner: TraceRunner;
+
 	constructor(options: VoiceAgentOptions) {
 		this.apiKey = options.apiKey;
 		this.model = options.model ?? "claude-sonnet-4-20250514";
 		this.maxToolCalls = options.maxToolCalls ?? 5;
+
+		this.traceEnabled = options.traceEnabled ?? false;
+		this.traceIndex = new TraceIndex({
+			maxEntries: options.traceMaxEntries,
+			defaultTtlMs: options.traceTtlMs,
+		});
+		this.traceCompiler = new TraceCompiler({
+			defaultTtlMs: options.traceTtlMs,
+		});
+		this.guardEvaluator = new GuardEvaluator();
+		this.traceRunner = new TraceRunner();
 	}
 
 	setTools(tools: VoiceAgentTools): void {
 		this.tools = tools;
+		this.traceRunner.setTools(tools);
 	}
 
 	async processUtterance(
@@ -71,8 +101,110 @@ export class VoiceAgent {
 		}
 
 		const start = Date.now();
-		const executionPath: ExecutionPath = "claude";
 
+		// ── Trace fast path ──────────────────────────────────────────────
+		if (this.traceEnabled) {
+			const traceResult = this.tryTracePath(
+				text,
+				conversationContext,
+				cachedState,
+			);
+			if (traceResult) {
+				const result = await traceResult;
+				if (result) {
+					return {
+						...result,
+						durationMs: Date.now() - start,
+					};
+				}
+			}
+		}
+
+		// ── Claude tool-use path ─────────────────────────────────────────
+		return this.runClaudePath(text, conversationContext, cachedState, start);
+	}
+
+	/**
+	 * Attempt the trace fast path: match → guard → run.
+	 * Returns null if no match, guard failure, or destructive trace
+	 * without confirmation token.
+	 */
+	private tryTracePath(
+		text: string,
+		conversationContext: string[],
+		cachedState?: CachedAgentState,
+	): Promise<Omit<VoiceAgentResponse, "durationMs"> | null> | null {
+		const match = this.traceIndex.match(text, conversationContext);
+		if (!match) return null;
+
+		const guardContext = {
+			cachedState: cachedState
+				? {
+						workspaces: cachedState.workspaces.map((ws) => ({
+							workspaceId: ws.workspaceId,
+							agentStatus: ws.agentStatus,
+							paneId: ws.paneId,
+						})),
+					}
+				: null,
+			conversation: conversationContext,
+			resolvedArgs: match.args,
+		};
+
+		const guardResult = this.guardEvaluator.evaluate(
+			match.trace,
+			guardContext,
+		);
+
+		if (!guardResult.ok) {
+			console.warn(
+				`[voice:agent] Guard failed for trace ${match.trace.id}: ${guardResult.reason}`,
+			);
+			return null;
+		}
+
+		// Destructive traces require confirmation — don't run via fast path,
+		// fall back to Claude so it can ask for confirmation naturally
+		if (match.trace.risk === "destructive") {
+			return null;
+		}
+
+		return this.executeTrace(match.trace, match.args);
+	}
+
+	private async executeTrace(
+		trace: import("../types").CompiledToolTrace,
+		args: Record<string, unknown>,
+	): Promise<Omit<VoiceAgentResponse, "durationMs"> | null> {
+		const result = await this.traceRunner.run(trace, args);
+
+		if (!result.success) {
+			console.warn(
+				`[voice:agent] Trace execution failed: ${result.error}`,
+			);
+			return null;
+		}
+
+		return {
+			text:
+				typeof result.output === "string"
+					? result.output
+					: "Done.",
+			executionPath: "trace" as const,
+			traceId: trace.id,
+		};
+	}
+
+	/**
+	 * Full Claude tool-use loop. On success, compiles a trace and inserts
+	 * it into the index for future fast-path matches.
+	 */
+	private async runClaudePath(
+		text: string,
+		conversationContext: string[],
+		cachedState: CachedAgentState | undefined,
+		start: number,
+	): Promise<VoiceAgentResponse> {
 		const messages: ClaudeMessage[] = this.buildMessages(
 			text,
 			conversationContext,
@@ -80,11 +212,12 @@ export class VoiceAgent {
 		);
 
 		let toolCallCount = 0;
+		const toolCallRecords: ToolCallRecord[] = [];
+		let responseText = "";
 
 		while (toolCallCount < this.maxToolCalls) {
 			const response = await this.callClaude(messages);
 
-			// Extract text and tool-use blocks
 			const textBlocks = response.content.filter(
 				(b: ClaudeContentBlock) => b.type === "text",
 			);
@@ -92,23 +225,22 @@ export class VoiceAgent {
 				(b: ClaudeContentBlock) => b.type === "tool_use",
 			);
 
-			// No tool calls — return the text response
 			if (toolUseBlocks.length === 0) {
-				const responseText =
+				responseText =
 					textBlocks.map((b: ClaudeContentBlock) => b.text).join(" ") ||
 					"I couldn't process that request.";
 
+				this.maybeCompileTrace(text, toolCallRecords, responseText);
+
 				return {
 					text: responseText,
-					executionPath,
+					executionPath: "claude",
 					durationMs: Date.now() - start,
 				};
 			}
 
-			// Add assistant message to conversation
 			messages.push({ role: "assistant", content: response.content });
 
-			// Execute each tool call
 			const toolResults: ClaudeContentBlock[] = [];
 			for (const block of toolUseBlocks) {
 				toolCallCount++;
@@ -122,30 +254,61 @@ export class VoiceAgent {
 					content: JSON.stringify(result.output),
 					is_error: result.isError,
 				});
+
+				toolCallRecords.push({
+					name: block.name!,
+					input: block.input ?? {},
+					output: result.output,
+					isError: result.isError,
+				});
 			}
 
-			// Add tool results and continue the loop
 			messages.push({ role: "user", content: toolResults });
 		}
 
-		// Exceeded max tool calls — ask Claude for a final summary
 		messages.push({
 			role: "user",
 			content: "Summarize what you've done so far in one sentence.",
 		});
 
 		const finalResponse = await this.callClaude(messages);
-		const finalText =
+		responseText =
 			finalResponse.content
 				.filter((b: ClaudeContentBlock) => b.type === "text")
 				.map((b: ClaudeContentBlock) => b.text)
 				.join(" ") || "I completed the requested actions.";
 
+		this.maybeCompileTrace(text, toolCallRecords, responseText);
+
 		return {
-			text: finalText,
-			executionPath,
+			text: responseText,
+			executionPath: "claude",
 			durationMs: Date.now() - start,
 		};
+	}
+
+	/**
+	 * After a successful Claude path, attempt to compile and index
+	 * the transcript as a replayable trace for future fast-path hits.
+	 */
+	private maybeCompileTrace(
+		utterance: string,
+		toolCalls: ToolCallRecord[],
+		responseText: string,
+	): void {
+		if (!this.traceEnabled) return;
+		if (toolCalls.length === 0) return;
+
+		const transcript: TranscriptRecord = {
+			utterance,
+			toolCalls,
+			responseText,
+		};
+
+		const compiled = this.traceCompiler.compile(transcript);
+		if (compiled) {
+			this.traceIndex.insert(compiled);
+		}
 	}
 
 	private buildMessages(
@@ -294,5 +457,19 @@ export class VoiceAgent {
 	 */
 	requiresConfirmation(toolName: string): boolean {
 		return isDestructiveTool(toolName);
+	}
+
+	/**
+	 * Get the trace index for observability and testing.
+	 */
+	getTraceIndex(): TraceIndex {
+		return this.traceIndex;
+	}
+
+	/**
+	 * Clear all cached traces.
+	 */
+	clearTraces(): void {
+		this.traceIndex.clear();
 	}
 }

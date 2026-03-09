@@ -41,7 +41,11 @@ export {
 
 // Pipeline
 export { VoicePipeline } from "./pipeline/voice-pipeline";
-export { ConversationWindow } from "./pipeline/conversation-window";
+export {
+	ConversationWindow,
+	isAffirmativeUtterance,
+	type PendingIntent,
+} from "./pipeline/conversation-window";
 export { SpeculativeCache } from "./pipeline/speculative-cache";
 
 // Agent
