@@ -16,15 +16,16 @@ export class WorkspacePaneResolver {
 	resolvePaneId(workspaceId: string): string | null {
 		const { tabsState } = appState.data;
 
-		// Check focused pane first
-		const focusedPaneId = tabsState.focusedPaneIds?.[workspaceId];
-		if (focusedPaneId && tabsState.panes[focusedPaneId]) {
-			return focusedPaneId;
-		}
-
-		// Fall back to active tab's first pane
+		// Check focused pane for the active tab first
+		// focusedPaneIds is keyed by tabId, not workspaceId
 		const activeTabId = tabsState.activeTabIds?.[workspaceId];
 		if (activeTabId) {
+			const focusedPaneId = tabsState.focusedPaneIds?.[activeTabId];
+			if (focusedPaneId && tabsState.panes[focusedPaneId]) {
+				return focusedPaneId;
+			}
+
+			// Fall back to active tab's first pane
 			const tab = tabsState.tabs.find((t) => t.id === activeTabId);
 			if (tab) {
 				// Find first terminal pane in this tab
@@ -42,8 +43,10 @@ export class WorkspacePaneResolver {
 		}
 
 		// Last resort: any pane belonging to any tab in this workspace
-		for (const tab of tabsState.tabs) {
-			// Tab's workspace association is determined by its presence in activeTabIds
+		const workspaceTabs = tabsState.tabs.filter(
+			(t) => t.workspaceId === workspaceId,
+		);
+		for (const tab of workspaceTabs) {
 			const pane = Object.values(tabsState.panes).find(
 				(p: Pane) => p.tabId === tab.id && p.type === "terminal",
 			);
@@ -60,13 +63,16 @@ export class WorkspacePaneResolver {
 		const { tabsState } = appState.data;
 		const paneIds: string[] = [];
 
-		// Collect panes from the workspace's active tab
-		const activeTabId = tabsState.activeTabIds?.[workspaceId];
-		if (activeTabId) {
-			for (const pane of Object.values(tabsState.panes)) {
-				if ((pane as Pane).tabId === activeTabId) {
-					paneIds.push((pane as Pane).id);
-				}
+		// Collect panes from ALL tabs belonging to this workspace
+		const workspaceTabIds = new Set(
+			tabsState.tabs
+				.filter((t) => t.workspaceId === workspaceId)
+				.map((t) => t.id),
+		);
+
+		for (const pane of Object.values(tabsState.panes)) {
+			if (workspaceTabIds.has((pane as Pane).tabId)) {
+				paneIds.push((pane as Pane).id);
 			}
 		}
 

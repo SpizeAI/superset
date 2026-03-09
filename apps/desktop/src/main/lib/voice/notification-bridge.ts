@@ -18,6 +18,7 @@ import { getDaemonTerminalManager } from "../terminal";
  */
 export class NotificationBridge extends EventEmitter {
 	private handlers: Array<() => void> = [];
+	private started = false;
 	private workspaceNameResolver: (workspaceId: string) => string;
 
 	constructor(
@@ -28,6 +29,9 @@ export class NotificationBridge extends EventEmitter {
 	}
 
 	start(): void {
+		if (this.started) return;
+		this.started = true;
+
 		// Listen for agent lifecycle events
 		const onLifecycle = (event: AgentLifecycleEvent) => {
 			this.handleAgentLifecycle(event);
@@ -72,6 +76,7 @@ export class NotificationBridge extends EventEmitter {
 			cleanup();
 		}
 		this.handlers = [];
+		this.started = false;
 		console.log("[voice:bridge] Stopped");
 	}
 

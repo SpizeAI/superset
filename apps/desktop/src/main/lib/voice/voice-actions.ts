@@ -65,7 +65,6 @@ export function createVoiceActions(deps: {
 					| "error"
 					| "waiting-permission",
 				workspaceId: ws.id,
-				lastActivityAt: Date.now(),
 			};
 		},
 

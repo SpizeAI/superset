@@ -62,6 +62,7 @@ class RingBuffer {
 export class TerminalReader {
 	private buffers = new Map<string, RingBuffer>();
 	private listeners: Array<() => void> = [];
+	private paneListeners = new Map<string, () => void>();
 	private readonly maxLines: number;
 
 	constructor(maxLines?: number) {
@@ -85,9 +86,11 @@ export class TerminalReader {
 			};
 
 			terminal.on(`data:${paneId}`, handler);
-			this.listeners.push(() => {
+			const cleanup = () => {
 				terminal.off(`data:${paneId}`, handler);
-			});
+			};
+			this.listeners.push(cleanup);
+			this.paneListeners.set(paneId, cleanup);
 		}
 	}
 
@@ -95,6 +98,12 @@ export class TerminalReader {
 	 * Stop capturing for a pane.
 	 */
 	stopCapture(paneId: string): void {
+		const cleanup = this.paneListeners.get(paneId);
+		if (cleanup) {
+			cleanup();
+			this.paneListeners.delete(paneId);
+			this.listeners = this.listeners.filter((l) => l !== cleanup);
+		}
 		this.buffers.delete(paneId);
 	}
 

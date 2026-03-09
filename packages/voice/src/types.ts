@@ -84,7 +84,7 @@ export interface AgentStatus {
 	status: AgentStatusValue;
 	workspaceId: string;
 	currentTask?: string;
-	lastActivityAt: number;
+	lastActivityAt?: number;
 }
 
 export interface VoiceAgentTools {
@@ -159,7 +159,7 @@ export interface CachedWorkspaceState {
 	agentStatus: AgentStatusValue;
 	pendingNotifications: number;
 	terminalSummary?: string;
-	lastActivityAt: number;
+	lastActivityAt?: number;
 }
 
 export interface VocabularyHints {

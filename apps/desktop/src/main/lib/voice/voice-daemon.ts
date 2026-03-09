@@ -82,8 +82,6 @@ export class VoiceDaemon {
 			return;
 		}
 
-		this.running = true;
-
 		// Initialize Claude agent if API key available
 		const apiKey = this.deps.getApiKey();
 		if (apiKey) {
@@ -95,17 +93,27 @@ export class VoiceDaemon {
 			});
 		}
 
-		// Wire pipeline dependencies
-		this.pipeline.init({
-			onWakeDetected: this.deps.onWakeDetected,
-			onSpeechEnd: this.deps.onSpeechEnd,
-			transcribe: this.deps.transcribe,
-			processUtterance: (text, context) =>
-				this.handleUtterance(text, context),
-			speak: this.deps.speak,
-			speakStreaming: this.deps.speakStreaming,
-			cancel: this.deps.cancel,
-		});
+		try {
+			// Wire pipeline dependencies
+			this.pipeline.init({
+				onWakeDetected: this.deps.onWakeDetected,
+				onSpeechEnd: this.deps.onSpeechEnd,
+				transcribe: this.deps.transcribe,
+				processUtterance: (text, context) =>
+					this.handleUtterance(text, context),
+				speak: this.deps.speak,
+				speakStreaming: this.deps.speakStreaming,
+				cancel: this.deps.cancel,
+			});
+
+			// Start the pipeline
+			this.pipeline.start(config.conversationTimeoutMs);
+		} catch (error) {
+			this.agent = null;
+			throw error;
+		}
+
+		this.running = true;
 
 		// Forward pipeline state changes and track trace metrics
 		this.pipeline.onEvent((event, data) => {
@@ -129,9 +137,6 @@ export class VoiceDaemon {
 			this.handleAlert(alert);
 		});
 
-		// Start the pipeline
-		this.pipeline.start(config.conversationTimeoutMs);
-
 		console.log("[voice:daemon] Started");
 	}
 
@@ -147,11 +152,11 @@ export class VoiceDaemon {
 		console.log("[voice:daemon] Stopped");
 	}
 
-	toggle(): void {
+	async toggle(): Promise<void> {
 		if (this.running) {
 			this.stop();
 		} else {
-			this.start();
+			await this.start();
 		}
 	}
 

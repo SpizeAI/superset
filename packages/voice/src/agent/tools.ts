@@ -236,11 +236,17 @@ export function isDestructiveTool(toolName: string): boolean {
 	return def?.risk === "destructive";
 }
 
+// Tool names not sent to Claude but valid on VoiceAgentTools
+const INTERNAL_TOOL_NAMES: ReadonlySet<string> = new Set(["speak"]);
+
 /**
  * Type guard to validate a tool name exists in the contract.
  */
 export function isValidToolName(
 	name: string,
 ): name is keyof VoiceAgentTools {
-	return VOICE_TOOL_DEFINITIONS.some((t) => t.name === name);
+	return (
+		VOICE_TOOL_DEFINITIONS.some((t) => t.name === name) ||
+		INTERNAL_TOOL_NAMES.has(name)
+	);
 }

@@ -243,6 +243,7 @@ export class VoiceAgent {
 
 			const toolResults: ClaudeContentBlock[] = [];
 			for (const block of toolUseBlocks) {
+				if (toolCallCount >= this.maxToolCalls) break;
 				toolCallCount++;
 				const result = await this.executeTool(
 					block.name!,

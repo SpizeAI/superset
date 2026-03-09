@@ -16,12 +16,12 @@ export class FallbackHandler {
 		const normalized = text.toLowerCase().trim();
 		let responseText: string;
 
-		if (this.matchesPattern(normalized, ["status", "how", "what's going on", "update"])) {
-			responseText = this.buildStatusResponse(cachedState);
-		} else if (this.matchesPattern(normalized, ["list", "workspaces", "show"])) {
-			responseText = this.buildWorkspaceList(cachedState);
-		} else if (this.matchesPattern(normalized, ["notification", "alert", "pending"])) {
+		if (this.matchesPattern(normalized, ["notification", "alert", "pending"])) {
 			responseText = this.buildNotificationResponse(cachedState);
+		} else if (this.matchesPattern(normalized, ["status", "how are", "how's", "what's going on", "update"])) {
+			responseText = this.buildStatusResponse(cachedState);
+		} else if (this.matchesPattern(normalized, ["list", "workspaces"])) {
+			responseText = this.buildWorkspaceList(cachedState);
 		} else {
 			responseText =
 				"I'm having trouble reaching the AI service right now. I can still tell you workspace status if you ask.";

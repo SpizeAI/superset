@@ -83,7 +83,7 @@ export class VoiceStateCache {
 					branchName: ws.branchName,
 					agentStatus: ws.agentStatus as CachedWorkspaceState["agentStatus"],
 					pendingNotifications: ws.pendingNotifications,
-					lastActivityAt: Date.now(),
+					lastActivityAt: undefined,
 				}),
 			);
 
