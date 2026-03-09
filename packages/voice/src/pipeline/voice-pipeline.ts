@@ -96,8 +96,8 @@ export class VoicePipeline {
 		if (!this.deps) return;
 		if (this.state === "speaking" || this.state === "thinking") return;
 
+		this.deps.cancel();
 		const cycle = this.newCycle();
-		this.cancelCurrentCycle();
 
 		this.transitionTo("speaking");
 		try {

@@ -81,13 +81,18 @@ export class AlertEvaluator {
 		}
 		this.seenEventIds.add(event.eventId);
 
+		// Cache workspace name for batch resolution
+		if (event.workspaceId) {
+			this.workspaceNameCache.set(event.workspaceId, workspaceName);
+		}
+
 		// Determine priority
 		const priority = this.classifyPriority(event);
 
 		// High-priority events bypass cooldown and batch
 		if (priority === "high") {
 			this.flushBatch();
-			this.emitAlert(this.buildAlert(event, workspaceName, priority));
+			this.emitAlert(this.buildAlert(event, workspaceName, priority), event.kind);
 			return;
 		}
 
@@ -128,6 +133,7 @@ export class AlertEvaluator {
 			const event = events[0];
 			this.emitAlert(
 				this.buildAlert(event, this.resolveWorkspaceName(event), "normal"),
+				event.kind,
 			);
 		} else {
 			// Merge into a single batch alert
@@ -216,8 +222,12 @@ export class AlertEvaluator {
 		}
 	}
 
-	private emitAlert(alert: ProactiveAlert): void {
-		const cooldownKey = `${alert.workspaceId}:${alert.type}`;
+	private emitAlert(
+		alert: ProactiveAlert,
+		eventKind?: VoiceSourceEvent["kind"],
+	): void {
+		// Use event.kind for cooldown key to match the evaluate() lookup
+		const cooldownKey = `${alert.workspaceId}:${eventKind ?? alert.type}`;
 		this.cooldowns.set(cooldownKey, Date.now());
 		this.acceptedCount++;
 

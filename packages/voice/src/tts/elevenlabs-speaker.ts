@@ -5,8 +5,7 @@ export interface ElevenLabsSpeakerOptions {
 }
 
 export interface SpeakOptions {
-	/** If true, resolves as soon as audio starts playing rather than when it finishes */
-	resolveOnStart?: boolean;
+	// Reserved for future streaming playback enhancements
 }
 
 /**
@@ -31,8 +30,7 @@ export class ElevenLabsSpeaker {
 	}
 
 	/**
-	 * Speak text with streaming playback. Resolves when playback completes
-	 * (or when audio starts if resolveOnStart is true).
+	 * Speak text with streaming playback. Resolves when playback completes.
 	 */
 	async speak(text: string, options: SpeakOptions = {}): Promise<void> {
 		this.cancel();

@@ -23,13 +23,15 @@ export class MacOsFallbackSpeaker {
 		return new Promise((resolve, reject) => {
 			const sanitized = sanitizeForShell(text);
 
-			this.currentProcess = execFile(
+			const proc = execFile(
 				"say",
 				["-v", this.voice, "-r", String(this.rate), sanitized],
 				(error) => {
-					this.currentProcess = null;
+					// Only null if this is still the current process
+					if (this.currentProcess === proc) {
+						this.currentProcess = null;
+					}
 					if (error) {
-						// Error code 9 = killed by cancel(), not a real error
 						if ((error as NodeJS.ErrnoException).signal === "SIGTERM") {
 							resolve();
 							return;
@@ -42,6 +44,7 @@ export class MacOsFallbackSpeaker {
 					resolve();
 				},
 			);
+			this.currentProcess = proc;
 		});
 	}
 
@@ -62,9 +65,11 @@ export class MacOsFallbackSpeaker {
 }
 
 /**
- * Strip characters that could cause issues with the `say` command.
- * Keeps alphanumeric, spaces, basic punctuation.
+ * Strip control characters that could cause issues with the `say` command.
+ * Preserves unicode letters (accented, CJK, etc.) since execFile bypasses
+ * shell interpretation and macOS `say` handles multilingual text natively.
  */
 function sanitizeForShell(text: string): string {
-	return text.replace(/[^\w\s.,!?;:'"()\-/]/g, "");
+	// biome-ignore lint: control char regex is intentional
+	return text.replace(/[\x00-\x1f\x7f]/g, "");
 }

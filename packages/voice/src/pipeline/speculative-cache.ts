@@ -111,8 +111,10 @@ export class SpeculativeCache {
 				followUpClass: branch.followUpClass,
 			};
 
-			// Don't re-generate if already cached
-			if (this.get(key)) return;
+			// Don't re-generate if already cached (direct lookup to avoid polluting metrics)
+			const cacheKey = this.serializeKey(key);
+			const existing = this.entries.get(cacheKey);
+			if (existing && Date.now() <= existing.expiresAt) return;
 
 			this.activeGenerations++;
 			try {

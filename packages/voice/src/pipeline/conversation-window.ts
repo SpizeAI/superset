@@ -73,7 +73,11 @@ export class ConversationWindow {
 		this.pendingIntent = null;
 		this.clearTimer();
 		for (const handler of this.closeHandlers) {
-			handler();
+			try {
+				handler();
+			} catch (error) {
+				console.error("[voice:conversation] Close handler error:", error);
+			}
 		}
 	}
 
