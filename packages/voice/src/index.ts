@@ -38,3 +38,22 @@ export {
 	DEFAULT_VOCABULARY_HINTS,
 	LATENCY_SLOS,
 } from "./config";
+
+// Pipeline
+export { VoicePipeline } from "./pipeline/voice-pipeline";
+export { ConversationWindow } from "./pipeline/conversation-window";
+export { SpeculativeCache } from "./pipeline/speculative-cache";
+
+// Agent
+export { VoiceAgent } from "./agent/voice-agent";
+export { FallbackHandler } from "./agent/fallback-handler";
+export {
+	VOICE_TOOL_DEFINITIONS,
+	toClaudeTools,
+	isDestructiveTool,
+	isValidToolName,
+} from "./agent/tools";
+
+// Proactive
+export { AlertEvaluator } from "./proactive/alert-evaluator";
+export { SummaryGenerator } from "./proactive/summary-generator";
