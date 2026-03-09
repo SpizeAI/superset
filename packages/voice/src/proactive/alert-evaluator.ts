@@ -29,6 +29,7 @@ export type AlertHandler = (alert: ProactiveAlert) => void;
 export class AlertEvaluator {
 	private handlers: AlertHandler[] = [];
 	private seenEventIds = new Set<string>();
+	private readonly maxSeenEventIds = 1000;
 	private cooldowns = new Map<string, number>();
 	private pendingBatch: VoiceSourceEvent[] = [];
 	private batchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -80,6 +81,15 @@ export class AlertEvaluator {
 			return;
 		}
 		this.seenEventIds.add(event.eventId);
+
+		// Evict oldest event IDs to prevent unbounded growth
+		if (this.seenEventIds.size > this.maxSeenEventIds) {
+			const iter = this.seenEventIds.values();
+			const oldest = iter.next().value;
+			if (oldest !== undefined) {
+				this.seenEventIds.delete(oldest);
+			}
+		}
 
 		// Cache workspace name for batch resolution
 		if (event.workspaceId) {
@@ -148,7 +158,7 @@ export class AlertEvaluator {
 				priority: "normal",
 				sourceEventId: events.map((e) => e.eventId).join(","),
 			};
-			this.emitAlert(alert);
+			this.emitAlert(alert, events[0].kind);
 		}
 	}
 

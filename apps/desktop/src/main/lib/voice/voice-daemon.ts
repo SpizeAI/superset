@@ -224,11 +224,10 @@ export class VoiceDaemon {
 					"[voice:daemon] Claude agent failed, using fallback:",
 					error,
 				);
-				this.metrics.claudeFallbacks++;
 			}
 		}
 
-		const response = this.fallbackHandler.processUtterance(text, cachedState);
+		const response = await this.fallbackHandler.processUtterance(text, cachedState);
 		this.recordExecutionPath(response.executionPath);
 		return response;
 	}

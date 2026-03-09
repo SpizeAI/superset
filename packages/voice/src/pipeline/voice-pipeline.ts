@@ -157,7 +157,7 @@ export class VoicePipeline {
 			this.emit("transcript-ready", text);
 
 			// ── Check for pending destructive confirmation ───────────────
-			const pendingConfirmation = this.tryConfirmDestructive(text);
+			const pendingConfirmation = await this.tryConfirmDestructive(text);
 			if (pendingConfirmation !== undefined) {
 				if (!this.isCycleCurrent(cycle)) return;
 
@@ -227,9 +227,9 @@ export class VoicePipeline {
 	 * - null if denied (user said no)
 	 * - undefined if no pending intent exists (normal flow)
 	 */
-	private tryConfirmDestructive(
+	private async tryConfirmDestructive(
 		text: string,
-	): Promise<VoiceAgentResponse> | null | undefined {
+	): Promise<VoiceAgentResponse | null | undefined> {
 		if (!this.confirmationWindow.hasPendingIntent()) return undefined;
 
 		const intent = this.confirmationWindow.getPendingIntent();
@@ -239,6 +239,11 @@ export class VoicePipeline {
 			const confirmed = this.confirmationWindow.confirmIntent(intent.token);
 			if (confirmed && this.deps?.executeConfirmedTrace) {
 				return this.deps.executeConfirmedTrace(confirmed);
+			}
+			// executeConfirmedTrace not wired — don't consume the intent,
+			// fall through to normal processing instead of saying "Cancelled."
+			if (!this.deps?.executeConfirmedTrace) {
+				return undefined;
 			}
 			return null;
 		}
@@ -266,6 +271,9 @@ export class VoicePipeline {
 	private openConversationalWindow(): void {
 		this.transitionTo("conversational");
 		this.clearConversationTimer();
+
+		// Clean up any existing speech handler before registering a new one
+		this.unbindSpeech();
 
 		// Listen for follow-up speech without wake word
 		if (this.deps) {

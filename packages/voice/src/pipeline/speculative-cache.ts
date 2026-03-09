@@ -102,8 +102,10 @@ export class SpeculativeCache {
 	): Promise<void> {
 		const contextHash = this.hashContext(context);
 
-		const tasks = branches.map(async (branch) => {
-			if (this.activeGenerations >= this.maxBackgroundGenerations) return;
+		const tasks: Promise<void>[] = [];
+
+		for (const branch of branches) {
+			if (this.activeGenerations >= this.maxBackgroundGenerations) break;
 
 			const key: SpeculativeKey = {
 				conversationId,
@@ -114,22 +116,27 @@ export class SpeculativeCache {
 			// Don't re-generate if already cached (direct lookup to avoid polluting metrics)
 			const cacheKey = this.serializeKey(key);
 			const existing = this.entries.get(cacheKey);
-			if (existing && Date.now() <= existing.expiresAt) return;
+			if (existing && Date.now() <= existing.expiresAt) continue;
 
+			// Increment BEFORE the async operation to reserve the slot
 			this.activeGenerations++;
-			try {
-				const audioPath = await generator(branch.text);
-				this.put(key, branch.text, audioPath);
-			} catch (error) {
-				console.warn(
-					"[voice:speculative] Generation failed for",
-					branch.followUpClass,
-					error,
-				);
-			} finally {
-				this.activeGenerations--;
-			}
-		});
+			tasks.push(
+				(async () => {
+					try {
+						const audioPath = await generator(branch.text);
+						this.put(key, branch.text, audioPath);
+					} catch (error) {
+						console.warn(
+							"[voice:speculative] Generation failed for",
+							branch.followUpClass,
+							error,
+						);
+					} finally {
+						this.activeGenerations--;
+					}
+				})(),
+			);
+		}
 
 		await Promise.allSettled(tasks);
 	}
