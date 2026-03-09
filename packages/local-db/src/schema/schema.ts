@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
 
 import type {
@@ -208,6 +208,16 @@ export const settings = sqliteTable("settings", {
 	worktreeBaseDir: text("worktree_base_dir"),
 	openLinksInApp: integer("open_links_in_app", { mode: "boolean" }),
 	defaultEditor: text("default_editor").$type<ExternalApp>(),
+	// Voice control settings
+	voiceEnabled: integer("voice_enabled", { mode: "boolean" }),
+	voiceProactiveAlerts: integer("voice_proactive_alerts", { mode: "boolean" }),
+	voiceTtsProvider: text("voice_tts_provider"),
+	voiceSttMode: text("voice_stt_mode"),
+	voiceWhisperModel: text("voice_whisper_model"),
+	voiceWakeWordSensitivity: real("voice_wake_word_sensitivity"),
+	voiceConversationTimeoutMs: integer("voice_conversation_timeout_ms"),
+	voiceCommandTimeoutMs: integer("voice_command_timeout_ms"),
+	voiceTraceEnabled: integer("voice_trace_enabled", { mode: "boolean" }),
 });
 
 export type InsertSettings = typeof settings.$inferInsert;
