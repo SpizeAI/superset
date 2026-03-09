@@ -196,7 +196,7 @@ export class VoiceDaemon {
 			this.agent?.setTraceEnabled(false);
 		} else {
 			console.log("[voice:daemon] Trace kill-switch deactivated — traces re-enabled");
-			this.agent?.setTraceEnabled(true);
+			this.agent?.setTraceEnabled(this.deps.getConfig().voiceTraceEnabled);
 		}
 	}
 
