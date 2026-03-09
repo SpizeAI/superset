@@ -30,8 +30,8 @@ export class TraceIndex {
 	insert(trace: CompiledToolTrace): void {
 		this.evictExpired();
 
-		// LRU eviction if at capacity
-		if (this.traces.size >= this.maxEntries) {
+		// LRU eviction if at capacity — skip if updating an existing signature
+		if (!this.traces.has(trace.signature) && this.traces.size >= this.maxEntries) {
 			let oldestKey: string | null = null;
 			let oldestTime = Number.POSITIVE_INFINITY;
 
@@ -63,9 +63,10 @@ export class TraceIndex {
 
 		if (!trace) return null;
 
-		// Check TTL
+		// Check TTL (use defaultTtlMs as fallback if trace has no ttlMs)
 		const now = Date.now();
-		if (now > trace.createdAt + trace.ttlMs) {
+		const ttl = trace.ttlMs || this.defaultTtlMs;
+		if (now > trace.createdAt + ttl) {
 			this.traces.delete(signature);
 			return null;
 		}
@@ -108,7 +109,8 @@ export class TraceIndex {
 	private evictExpired(): void {
 		const now = Date.now();
 		for (const [key, trace] of this.traces) {
-			if (now > trace.createdAt + trace.ttlMs) {
+			const ttl = trace.ttlMs || this.defaultTtlMs;
+			if (now > trace.createdAt + ttl) {
 				this.traces.delete(key);
 			}
 		}
@@ -120,8 +122,6 @@ export class TraceIndex {
 	): Record<string, unknown> {
 		const args: Record<string, unknown> = {};
 
-		// Simple extraction: look for workspace/pane identifiers in tokens
-		// More sophisticated extraction would use slot bindings
 		for (const binding of trace.slotBindings) {
 			if (binding.source === "utterance") {
 				// Find a token that looks like an identifier (not a command word)
@@ -131,6 +131,11 @@ export class TraceIndex {
 				if (candidate) {
 					args[binding.key] = candidate;
 				}
+			} else if (binding.source === "state_cache") {
+				// State cache bindings are resolved at execution time by the guard evaluator
+				// and trace runner from the cached agent state. Mark them as needing resolution
+				// so the runner knows to pull from state rather than utterance tokens.
+				args[binding.key] = `$${binding.key}`;
 			}
 		}
 

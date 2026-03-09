@@ -178,7 +178,9 @@ export class VoicePipeline {
 					this.conversationContext.push(`User: ${text}`);
 					this.conversationContext.push("Assistant: Cancelled.");
 					this.confirmationWindow.clearPendingIntent();
-					this.openConversationalWindow();
+					if (this.isCycleCurrent(cycle)) {
+						this.openConversationalWindow();
+					}
 				}
 				return;
 			}
@@ -236,14 +238,14 @@ export class VoicePipeline {
 		if (!intent) return undefined;
 
 		if (isAffirmativeUtterance(text)) {
-			const confirmed = this.confirmationWindow.confirmIntent(intent.token);
-			if (confirmed && this.deps?.executeConfirmedTrace) {
-				return this.deps.executeConfirmedTrace(confirmed);
-			}
-			// executeConfirmedTrace not wired — don't consume the intent,
-			// fall through to normal processing instead of saying "Cancelled."
+			// Check if executeConfirmedTrace is available BEFORE consuming the intent.
+			// If not wired, return undefined to fall through to normal processing.
 			if (!this.deps?.executeConfirmedTrace) {
 				return undefined;
+			}
+			const confirmed = this.confirmationWindow.confirmIntent(intent.token);
+			if (confirmed) {
+				return this.deps.executeConfirmedTrace(confirmed);
 			}
 			return null;
 		}

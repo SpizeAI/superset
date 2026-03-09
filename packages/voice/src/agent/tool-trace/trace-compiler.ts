@@ -51,10 +51,10 @@ export class TraceCompiler {
 		// Reject transcripts with too many steps
 		if (transcript.toolCalls.length > this.maxSteps) return null;
 
-		// Build steps from tool calls
+		// Build steps from tool calls, replacing dynamic values with slot references
 		const steps: TraceStep[] = transcript.toolCalls.map((tc) => ({
 			tool: tc.name,
-			argsTemplate: tc.input,
+			argsTemplate: this.templatizeArgs(tc.input),
 		}));
 
 		// Determine risk level
@@ -84,6 +84,21 @@ export class TraceCompiler {
 			steps,
 			guards,
 		};
+	}
+
+	private templatizeArgs(
+		input: Record<string, unknown>,
+	): Record<string, unknown> {
+		const SLOT_MAP: Record<string, string> = {
+			workspaceId: "$workspace",
+			paneId: "$pane",
+		};
+
+		const result: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(input)) {
+			result[key] = key in SLOT_MAP ? SLOT_MAP[key] : value;
+		}
+		return result;
 	}
 
 	private extractSlotBindings(

@@ -63,8 +63,9 @@ export class VoiceAgent {
 	private tools: VoiceAgentTools | null = null;
 
 	// Trace fast-path components
-	private readonly traceEnabled: boolean;
+	private traceEnabled: boolean;
 	private readonly traceIndex: TraceIndex;
+
 	private readonly traceCompiler: TraceCompiler;
 	private readonly guardEvaluator: GuardEvaluator;
 	private readonly traceRunner: TraceRunner;
@@ -243,7 +244,19 @@ export class VoiceAgent {
 
 			const toolResults: ClaudeContentBlock[] = [];
 			for (const block of toolUseBlocks) {
-				if (toolCallCount >= this.maxToolCalls) break;
+				if (toolCallCount >= this.maxToolCalls) {
+					// Add dummy results for remaining unprocessed tool_use blocks
+					// to avoid 400 errors from the Claude API (every tool_use needs a tool_result)
+					for (const remaining of toolUseBlocks.slice(toolUseBlocks.indexOf(block))) {
+						toolResults.push({
+							type: "tool_result",
+							tool_use_id: remaining.id,
+							content: "Tool call limit reached",
+							is_error: true,
+						});
+					}
+					break;
+				}
 				toolCallCount++;
 				const result = await this.executeTool(
 					block.name!,
@@ -472,5 +485,13 @@ export class VoiceAgent {
 	 */
 	clearTraces(): void {
 		this.traceIndex.clear();
+	}
+
+	/**
+	 * Enable or disable the trace fast path at runtime.
+	 * Used by the kill-switch to disable traces without rebuilding the agent.
+	 */
+	setTraceEnabled(enabled: boolean): void {
+		this.traceEnabled = enabled;
 	}
 }

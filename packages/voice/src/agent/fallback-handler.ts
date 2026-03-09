@@ -18,7 +18,7 @@ export class FallbackHandler {
 
 		if (this.matchesPattern(normalized, ["notification", "alert", "pending"])) {
 			responseText = this.buildNotificationResponse(cachedState);
-		} else if (this.matchesPattern(normalized, ["status", "how are", "how's", "what's going on", "update"])) {
+		} else if (this.matchesPattern(normalized, ["status", "how are", "how's", "how many", "what's going on", "update", "running"])) {
 			responseText = this.buildStatusResponse(cachedState);
 		} else if (this.matchesPattern(normalized, ["list", "workspaces"])) {
 			responseText = this.buildWorkspaceList(cachedState);

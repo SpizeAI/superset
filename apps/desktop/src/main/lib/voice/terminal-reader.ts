@@ -126,5 +126,6 @@ export class TerminalReader {
 		}
 		this.listeners = [];
 		this.buffers.clear();
+		this.paneListeners.clear();
 	}
 }

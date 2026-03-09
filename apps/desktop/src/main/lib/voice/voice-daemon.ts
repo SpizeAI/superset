@@ -193,8 +193,10 @@ export class VoiceDaemon {
 		if (disabled) {
 			console.warn("[voice:daemon] Trace kill-switch activated — Claude-only mode");
 			this.agent?.clearTraces();
+			this.agent?.setTraceEnabled(false);
 		} else {
 			console.log("[voice:daemon] Trace kill-switch deactivated — traces re-enabled");
+			this.agent?.setTraceEnabled(true);
 		}
 	}
 

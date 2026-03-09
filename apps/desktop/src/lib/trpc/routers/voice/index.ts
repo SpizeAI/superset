@@ -82,7 +82,7 @@ export const createVoiceRouter = () => {
 				})
 				.run();
 
-			voiceEvents.emit("toggle", newEnabled);
+			voiceEvents.emit("status", newEnabled ? "listening-for-wake" : "idle");
 			return { enabled: newEnabled };
 		}),
 
