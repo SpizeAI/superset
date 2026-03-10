@@ -23,6 +23,7 @@ import { createRingtoneRouter } from "./ringtone";
 import { createSettingsRouter } from "./settings";
 import { createTerminalRouter } from "./terminal";
 import { createUiStateRouter } from "./ui-state";
+import { createVoiceRouter } from "./voice";
 import { createWindowRouter } from "./window";
 import { createWorkspacesRouter } from "./workspaces";
 
@@ -50,6 +51,7 @@ export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 		hotkeys: createHotkeysRouter(getWindow),
 		external: createExternalRouter(),
 		settings: createSettingsRouter(),
+		voice: createVoiceRouter(),
 		config: createConfigRouter(),
 		uiState: createUiStateRouter(),
 		ringtone: createRingtoneRouter(getWindow),

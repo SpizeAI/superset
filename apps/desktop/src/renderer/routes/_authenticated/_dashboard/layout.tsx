@@ -88,6 +88,14 @@ function DashboardLayout() {
 		[openNewWorkspaceModal, currentWorkspace?.projectId],
 	);
 
+	const toggleVoice = electronTrpc.voice.toggle.useMutation();
+	useAppHotkey(
+		"VOICE_TOGGLE",
+		() => toggleVoice.mutate(),
+		undefined,
+		[toggleVoice],
+	);
+
 	return (
 		<div className="flex flex-col h-full w-full">
 			<TopBar />

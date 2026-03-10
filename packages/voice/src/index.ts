@@ -1,0 +1,78 @@
+// Core types
+export type {
+	VoicePipelineState,
+	VoiceSourceEvent,
+	ProactiveAlert,
+	AlertPriority,
+	VoiceConfig,
+	VoiceSecrets,
+	WhisperModel,
+	TtsProvider,
+	SttMode,
+	WakeEngine,
+	WorkspaceSummary,
+	NotificationSummary,
+	AgentStatus,
+	AgentStatusValue,
+	VoiceAgentTools,
+	TraceRisk,
+	TraceSlotBinding,
+	TraceStep,
+	CompiledToolTrace,
+	TraceMatchResult,
+	CachedWorkspaceState,
+	VocabularyHints,
+	CachedAgentState,
+	FollowUpClass,
+	SpeculativeKey,
+	SpeculativeAudioEntry,
+	ExecutionPath,
+	VoiceAgentResponse,
+	LatencyPath,
+	VoiceLatencyEvent,
+} from "./types";
+
+// Config and defaults
+export {
+	DEFAULT_VOICE_CONFIG,
+	VOICE_CONSTANTS,
+	DEFAULT_VOCABULARY_HINTS,
+	LATENCY_SLOS,
+} from "./config";
+
+// Pipeline
+export { VoicePipeline } from "./pipeline/voice-pipeline";
+export {
+	ConversationWindow,
+	isAffirmativeUtterance,
+	type PendingIntent,
+} from "./pipeline/conversation-window";
+export { SpeculativeCache } from "./pipeline/speculative-cache";
+
+// Agent
+export { VoiceAgent } from "./agent/voice-agent";
+export { FallbackHandler } from "./agent/fallback-handler";
+export {
+	VOICE_TOOL_DEFINITIONS,
+	toClaudeTools,
+	isDestructiveTool,
+	isValidToolName,
+} from "./agent/tools";
+
+// Audio
+export { MicrophoneCapture } from "./audio/microphone-capture";
+
+// Wake Word
+export { PorcupineDetector } from "./wake-word/porcupine-detector";
+
+// STT
+export { VoiceActivityDetector } from "./stt/vad";
+export { WhisperTranscriber } from "./stt/whisper-transcriber";
+
+// TTS
+export { ElevenLabsSpeaker } from "./tts/elevenlabs-speaker";
+export { MacOsFallbackSpeaker } from "./tts/macos-fallback";
+
+// Proactive
+export { AlertEvaluator } from "./proactive/alert-evaluator";
+export { SummaryGenerator } from "./proactive/summary-generator";

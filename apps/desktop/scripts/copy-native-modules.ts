@@ -40,6 +40,13 @@ const NATIVE_MODULES = [
 	"libsql",
 ] as const;
 
+// Voice modules are required for full voice input support on macOS.
+const VOICE_NATIVE_MODULES = [
+	"@picovoice/pvrecorder-node",
+	"@picovoice/porcupine-node",
+	"whisper-node",
+] as const;
+
 // Dependencies of native modules that need to be copied (may be hoisted or symlinked)
 const NATIVE_MODULE_DEPS = ["bindings", "file-uri-to-path"] as const;
 
@@ -305,8 +312,13 @@ function prepareNativeModules() {
 	// bun creates symlinks for direct dependencies in the workspace's node_modules
 	const nodeModulesDir = join(dirname(import.meta.dirname), "node_modules");
 
+	const requiredModules =
+		TARGET_PLATFORM === "darwin"
+			? [...NATIVE_MODULES, ...VOICE_NATIVE_MODULES]
+			: [...NATIVE_MODULES];
+
 	// Copy required native modules
-	for (const moduleName of NATIVE_MODULES) {
+	for (const moduleName of requiredModules) {
 		copyModuleIfSymlink(nodeModulesDir, moduleName, true);
 	}
 

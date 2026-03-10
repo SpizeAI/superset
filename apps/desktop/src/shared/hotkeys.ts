@@ -809,6 +809,12 @@ export const HOTKEYS = {
 		label: "Show Keyboard Shortcuts",
 		category: "Help",
 	}),
+	VOICE_TOGGLE: defineHotkey({
+		keys: "meta+shift+v",
+		label: "Toggle Voice Control",
+		category: "Window",
+		description: "Enable or disable voice control",
+	}),
 } as const satisfies Record<string, HotkeyDefinition>;
 
 export function getVisibleHotkeys(): HotkeyId[] {

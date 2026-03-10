@@ -48,6 +48,9 @@ const config: Configuration = {
 		"**/node_modules/node-pty/**/*",
 		// ast-grep native bindings (package + platform binary package)
 		"**/node_modules/@ast-grep/napi*/**/*",
+		// Voice control native bindings (macOS only, optional)
+		"**/node_modules/@picovoice/**/*",
+		"**/node_modules/whisper-node/**/*",
 		// libsql native bindings are loaded from @libsql/<platform>
 		"**/node_modules/@libsql/**/*",
 		// Sound files must be unpacked so external audio players (afplay, paplay, etc.) can access them
@@ -130,6 +133,17 @@ const config: Configuration = {
 		{
 			from: "node_modules/friendly-words",
 			to: "node_modules/friendly-words",
+			filter: ["**/*"],
+		},
+		// Voice control native bindings (macOS only, optional)
+		{
+			from: "node_modules/@picovoice",
+			to: "node_modules/@picovoice",
+			filter: ["**/*"],
+		},
+		{
+			from: "node_modules/whisper-node",
+			to: "node_modules/whisper-node",
 			filter: ["**/*"],
 		},
 		"!**/.DS_Store",
