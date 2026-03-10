@@ -96,12 +96,10 @@ async function createPorcupine(
 		}
 
 		// Use built-in keyword — "computer" as default until custom model is trained
-		const {
-			COMPUTER,
-		} = await import("@picovoice/porcupine-node/builtin_keywords");
+		const { BuiltinKeyword } = await import("@picovoice/porcupine-node");
 		return new Porcupine(
 			options.accessKey,
-			[COMPUTER],
+			[BuiltinKeyword.COMPUTER],
 			[options.sensitivity ?? 0.5],
 		);
 	} catch (error) {

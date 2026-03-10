@@ -37,6 +37,7 @@ import {
 	reconcileDaemonSessions,
 } from "./lib/terminal";
 import { disposeTray, initTray } from "./lib/tray";
+import { initVoice, stopVoice } from "./lib/voice/init";
 import { MainWindow } from "./windows/main";
 
 console.log("[main] Local database ready:", !!localDb);
@@ -197,6 +198,7 @@ app.on("before-quit", async (event) => {
 	// Quit confirmed or no confirmation needed - exit immediately
 	// Let OS clean up child processes, tray, etc.
 	isQuitting = true;
+	await stopVoice();
 	await outlit.shutdown();
 	disposeTray();
 	app.exit(0);
@@ -309,6 +311,11 @@ if (!gotTheLock) {
 		await makeAppSetup(() => MainWindow());
 		setupAutoUpdater();
 		initTray();
+
+		// Initialize voice control (process-scoped, independent of window lifecycle)
+		initVoice().catch((error) => {
+			console.error("[main] Failed to initialize voice control:", error);
+		});
 
 		// Process any deep links from cold start
 		const coldStartUrl = findDeepLinkInArgv(process.argv);

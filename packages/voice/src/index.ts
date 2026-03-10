@@ -9,6 +9,7 @@ export type {
 	WhisperModel,
 	TtsProvider,
 	SttMode,
+	WakeEngine,
 	WorkspaceSummary,
 	NotificationSummary,
 	AgentStatus,
@@ -57,6 +58,20 @@ export {
 	isDestructiveTool,
 	isValidToolName,
 } from "./agent/tools";
+
+// Audio
+export { MicrophoneCapture } from "./audio/microphone-capture";
+
+// Wake Word
+export { PorcupineDetector } from "./wake-word/porcupine-detector";
+
+// STT
+export { VoiceActivityDetector } from "./stt/vad";
+export { WhisperTranscriber } from "./stt/whisper-transcriber";
+
+// TTS
+export { ElevenLabsSpeaker } from "./tts/elevenlabs-speaker";
+export { MacOsFallbackSpeaker } from "./tts/macos-fallback";
 
 // Proactive
 export { AlertEvaluator } from "./proactive/alert-evaluator";

@@ -126,10 +126,19 @@ export class VoicePipeline {
 
 	private async handleWakeDetected(): Promise<void> {
 		if (!this.deps) return;
+
+		// Wake events should only initiate capture from wake-listening state.
+		// This prevents re-triggering while already capturing/transcribing/speaking.
+		if (this.state !== "listening-for-wake") {
+			return;
+		}
+
 		const cycle = this.newCycle();
 
 		this.transitionTo("listening-for-command");
 
+		// Replace any previous speech-end listener for this cycle.
+		this.unbindSpeech();
 		this.unsubSpeech = this.deps.onSpeechEnd(() => {
 			if (this.isCycleCurrent(cycle)) {
 				this.handleSpeechEnd(cycle);

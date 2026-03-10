@@ -9,6 +9,7 @@ import { OrganizationDropdown } from "./components/OrganizationDropdown";
 import { ResourceConsumption } from "./components/ResourceConsumption";
 import { SearchBarTrigger } from "./components/SearchBarTrigger";
 import { SidebarToggle } from "./components/SidebarToggle";
+import { VoiceOverlay } from "renderer/screens/main/components/VoiceOverlay/VoiceOverlay";
 import { WindowControls } from "./components/WindowControls";
 
 export function TopBar() {
@@ -54,6 +55,7 @@ export function TopBar() {
 			)}
 
 			<div className="flex items-center gap-3 h-full pr-4 shrink-0">
+				<VoiceOverlay />
 				{!isOnline && (
 					<div className="no-drag flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
 						<HiOutlineWifi className="size-3.5" />

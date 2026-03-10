@@ -140,25 +140,26 @@ export class AlertEvaluator {
 		const events = this.pendingBatch.splice(0);
 
 		if (events.length === 1) {
-			const event = events[0];
+			const event = events[0]!;
 			this.emitAlert(
 				this.buildAlert(event, this.resolveWorkspaceName(event), "normal"),
 				event.kind,
 			);
 		} else {
 			// Merge into a single batch alert
+			const firstEvent = events[0]!;
 			const workspaceNames = [
 				...new Set(events.map((e) => this.resolveWorkspaceName(e))),
 			];
 			const alert: ProactiveAlert = {
 				type: "agent-complete",
-				workspaceId: events[0].workspaceId ?? "",
+				workspaceId: firstEvent.workspaceId ?? "",
 				workspaceName: workspaceNames.join(", "),
 				summary: `${events.length} agents completed in ${workspaceNames.length === 1 ? workspaceNames[0] : `${workspaceNames.length} workspaces`}.`,
 				priority: "normal",
 				sourceEventId: events.map((e) => e.eventId).join(","),
 			};
-			this.emitAlert(alert, events[0].kind);
+			this.emitAlert(alert, firstEvent.kind);
 		}
 	}
 

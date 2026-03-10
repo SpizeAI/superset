@@ -30,6 +30,7 @@
 		"release": "electron-builder --publish always",
 		"clean:dev": "rimraf ./node_modules/.dev",
 		"generate:routes": "tsr generate",
+		"dev:voice": "cross-env NODE_ENV=development bun run clean:dev && bun run generate:icons && bun run copy:native-modules && bun run validate:native-runtime && cross-env NODE_ENV=development electron-vite dev --watch",
 		"pretypecheck": "bun run generate:icons && bun run generate:routes",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
@@ -87,6 +88,7 @@
 		"@superset/shared": "workspace:*",
 		"@superset/trpc": "workspace:*",
 		"@superset/ui": "workspace:*",
+		"@superset/voice": "workspace:*",
 		"@t3-oss/env-core": "^0.13.8",
 		"@tanstack/db": "0.5.31",
 		"@tanstack/electric-db-collection": "0.2.39",
@@ -211,6 +213,11 @@
 		"uuid": "^13.0.0",
 		"zod": "^4.3.5",
 		"zustand": "^5.0.8"
+	},
+	"optionalDependencies": {
+		"@picovoice/porcupine-node": "^4.0.2",
+		"@picovoice/pvrecorder-node": "^1.2.8",
+		"whisper-node": "^1.1.1"
 	},
 	"devDependencies": {
 		"@sentry/vite-plugin": "^4.7.0",

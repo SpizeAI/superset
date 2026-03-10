@@ -253,6 +253,20 @@
       "when": 1772841491441,
       "tag": "0035_add_workspace_sections",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1773000000000,
+      "tag": "0036_add_voice_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1773130000000,
+      "tag": "0037_add_voice_mic_device_index",
+      "breakpoints": true
     }
   ]
 }

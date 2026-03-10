@@ -1,3 +1,8 @@
+import { writeFileSync, unlinkSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import {
 	DEFAULT_VOCABULARY_HINTS,
 	VOICE_CONSTANTS,
@@ -170,74 +175,177 @@ export class WhisperTranscriber {
 		audio: Int16Array,
 		initialPrompt: string,
 	): Promise<string> {
-		const whisper = await loadWhisperBinding();
-		return whisper.transcribe(audio, {
-			model: this.model,
-			modelPath: this.modelPath,
-			initialPrompt,
-			language: "en",
-		});
+		if (audio.length === 0) return "";
+
+		// Write PCM to a temp WAV file for whisper.cpp
+		const wavPath = join(tmpdir(), `whisper-${randomUUID()}.wav`);
+		try {
+			writeWav16k(wavPath, audio);
+			return await runWhisperCpp(wavPath, {
+				model: this.model,
+				modelPath: this.modelPath,
+				prompt: initialPrompt,
+				language: "en",
+			});
+		} finally {
+			try {
+				unlinkSync(wavPath);
+			} catch {
+				// Best-effort cleanup
+			}
+		}
 	}
 
 	private async transcribeStreaming(
-		audio: Int16Array,
-		initialPrompt: string,
+		_audio: Int16Array,
+		_initialPrompt: string,
 	): Promise<string> {
-		const whisper = await loadWhisperBinding();
-
-		if (!whisper.transcribeStreaming) {
-			throw new Error("Streaming not supported by current Whisper binding");
-		}
-
-		return whisper.transcribeStreaming(audio, {
-			model: this.model,
-			modelPath: this.modelPath,
-			initialPrompt,
-			language: "en",
-		});
+		// whisper.cpp CLI doesn't support streaming — always fall back to batch
+		throw new Error("Streaming not supported by whisper.cpp CLI");
 	}
 }
 
-// ─── Whisper binding adapter ─────────────────────────────────────────────────
+// ─── whisper.cpp direct adapter ─────────────────────────────────────────────
+// Calls whisper.cpp main binary directly to get --prompt support.
+// whisper-node's shell wrapper doesn't expose the prompt flag.
 
-interface WhisperBinding {
-	transcribe(
-		audio: Int16Array,
-		options: {
-			model: string;
-			modelPath?: string;
-			initialPrompt: string;
-			language: string;
-		},
-	): Promise<string>;
-	transcribeStreaming?(
-		audio: Int16Array,
-		options: {
-			model: string;
-			modelPath?: string;
-			initialPrompt: string;
-			language: string;
-		},
-	): Promise<string>;
+let _whisperPaths: { binPath: string; modelsDir: string } | null = null;
+
+function resolveWhisperPaths(): { binPath: string; modelsDir: string } {
+	if (_whisperPaths) return _whisperPaths;
+
+	// whisper-node stores whisper.cpp under its lib directory.
+	// Walk up from this file to find node_modules/whisper-node.
+	const thisDir = dirname(fileURLToPath(import.meta.url));
+	const candidates = [
+		// Monorepo hoisted (packages/voice/src/stt/ → root node_modules)
+		join(thisDir, "..", "..", "..", "..", "node_modules", "whisper-node"),
+		// Package-local
+		join(thisDir, "..", "..", "node_modules", "whisper-node"),
+	];
+
+	for (const dir of candidates) {
+		const binPath = join(dir, "lib", "whisper.cpp", "main");
+		const modelsDir = join(dir, "lib", "whisper.cpp", "models");
+		if (existsSync(binPath)) {
+			_whisperPaths = { binPath, modelsDir };
+			return _whisperPaths;
+		}
+	}
+
+	throw new Error(
+		"[voice:stt] whisper.cpp binary not found. Run: bun add whisper-node && npx whisper-node download",
+	);
 }
 
-async function loadWhisperBinding(): Promise<WhisperBinding> {
+const MODEL_FILES: Record<string, string> = {
+	"tiny": "ggml-tiny.bin",
+	"tiny.en": "ggml-tiny.en.bin",
+	"base": "ggml-base.bin",
+	"base.en": "ggml-base.en.bin",
+	"small": "ggml-small.bin",
+	"small.en": "ggml-small.en.bin",
+	"medium": "ggml-medium.bin",
+	"medium.en": "ggml-medium.en.bin",
+};
+
+async function runWhisperCpp(
+	wavPath: string,
+	options: {
+		model: string;
+		modelPath?: string;
+		prompt: string;
+		language: string;
+	},
+): Promise<string> {
+	const { execFile: execFileCb } = await import("node:child_process");
+	const { promisify } = await import("node:util");
+	const execFile = promisify(execFileCb);
+
+	const { binPath, modelsDir } = resolveWhisperPaths();
+	const modelFile =
+		options.modelPath ??
+		join(modelsDir, MODEL_FILES[options.model] ?? `ggml-${options.model}.bin`);
+
+	const args = [
+		"-m", modelFile,
+		"-f", wavPath,
+		"-l", options.language,
+		"--no-timestamps",
+	];
+
+	if (options.prompt) {
+		args.push("--prompt", options.prompt);
+	}
+
 	try {
-		// Attempt to load whisper.cpp Node bindings
-		const binding = await import("whisper-node");
-		return binding as unknown as WhisperBinding;
+		const { stdout } = await execFile(binPath, args, {
+			cwd: join(binPath, ".."),
+			timeout: 30_000,
+			maxBuffer: 1024 * 1024,
+		});
+
+		// whisper.cpp outputs transcript lines to stdout, strip whitespace
+		return stdout
+			.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => line.length > 0 && !line.startsWith("["))
+			.join(" ")
+			.trim();
 	} catch (error) {
 		throw new Error(
-			`[voice:stt] Whisper binding unavailable. Ensure whisper-node is installed. ${error}`,
+			`[voice:stt] whisper.cpp failed: ${error instanceof Error ? error.message : String(error)}`,
 		);
 	}
+}
+
+/**
+ * Write 16kHz mono Int16 PCM data as a WAV file.
+ * whisper-node/whisper.cpp requires 16kHz WAV input.
+ */
+function writeWav16k(filePath: string, pcm: Int16Array): void {
+	const sampleRate = 16_000;
+	const numChannels = 1;
+	const bitsPerSample = 16;
+	const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+	const blockAlign = numChannels * (bitsPerSample / 8);
+	const dataSize = pcm.length * (bitsPerSample / 8);
+	const headerSize = 44;
+
+	const buffer = Buffer.alloc(headerSize + dataSize);
+
+	// RIFF header
+	buffer.write("RIFF", 0);
+	buffer.writeUInt32LE(36 + dataSize, 4);
+	buffer.write("WAVE", 8);
+
+	// fmt subchunk
+	buffer.write("fmt ", 12);
+	buffer.writeUInt32LE(16, 16); // subchunk size
+	buffer.writeUInt16LE(1, 20); // PCM format
+	buffer.writeUInt16LE(numChannels, 22);
+	buffer.writeUInt32LE(sampleRate, 24);
+	buffer.writeUInt32LE(byteRate, 28);
+	buffer.writeUInt16LE(blockAlign, 32);
+	buffer.writeUInt16LE(bitsPerSample, 34);
+
+	// data subchunk
+	buffer.write("data", 36);
+	buffer.writeUInt32LE(dataSize, 40);
+
+	// Write PCM samples
+	for (let i = 0; i < pcm.length; i++) {
+		buffer.writeInt16LE(pcm[i] ?? 0, headerSize + i * 2);
+	}
+
+	writeFileSync(filePath, buffer);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function mergeFrames(frames: Int16Array[]): Int16Array {
 	if (frames.length === 0) return new Int16Array(0);
-	if (frames.length === 1) return frames[0];
+	if (frames.length === 1) return frames[0]!;
 
 	const totalLength = frames.reduce((sum, f) => sum + f.length, 0);
 	const merged = new Int16Array(totalLength);

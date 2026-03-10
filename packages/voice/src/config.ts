@@ -3,7 +3,10 @@ import type { VoiceConfig, VocabularyHints } from "./types";
 export const DEFAULT_VOICE_CONFIG: VoiceConfig = {
 	enabled: false,
 	proactiveAlerts: true,
+	wakeEngine: "openwakeword",
 	wakeWordSensitivity: 0.5,
+	openWakeWordModel: "hey_jarvis_v0.1",
+	micDeviceIndex: -1,
 	whisperModel: "base.en",
 	conversationTimeoutMs: 8_000,
 	commandTimeoutMs: 15_000,

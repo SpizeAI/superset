@@ -137,7 +137,7 @@ function computeRmsEnergy(frame: Int16Array): number {
 
 	let sum = 0;
 	for (let i = 0; i < frame.length; i++) {
-		sum += frame[i] * frame[i];
+		sum += (frame[i] ?? 0) * (frame[i] ?? 0);
 	}
 
 	return Math.sqrt(sum / frame.length);

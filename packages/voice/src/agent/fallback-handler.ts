@@ -11,6 +11,7 @@ export class FallbackHandler {
 	async processUtterance(
 		text: string,
 		cachedState?: CachedAgentState,
+		options?: { reason?: "no-credentials" | "service-unavailable" },
 	): Promise<VoiceAgentResponse> {
 		const start = Date.now();
 		const normalized = text.toLowerCase().trim();
@@ -23,8 +24,13 @@ export class FallbackHandler {
 		} else if (this.matchesPattern(normalized, ["list", "workspaces"])) {
 			responseText = this.buildWorkspaceList(cachedState);
 		} else {
-			responseText =
-				"I'm having trouble reaching the AI service right now. I can still tell you workspace status if you ask.";
+			if (options?.reason === "no-credentials") {
+				responseText =
+					"I don't have AI credentials configured yet. I can still tell you workspace status if you ask.";
+			} else {
+				responseText =
+					"I'm having trouble reaching the AI service right now. I can still tell you workspace status if you ask.";
+			}
 		}
 
 		return {

@@ -57,8 +57,10 @@ export const SETTING_ITEM_ID = {
 
 	// Voice
 	VOICE_ENABLED: "voice-enabled",
+	VOICE_MICROPHONE: "voice-microphone",
 	VOICE_PROACTIVE: "voice-proactive",
 	VOICE_TTS: "voice-tts",
+	VOICE_SENSITIVITY: "voice-sensitivity",
 	VOICE_TRACE: "voice-trace",
 
 	// Permissions
@@ -777,6 +779,25 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
 		],
 	},
 	{
+		id: SETTING_ITEM_ID.VOICE_MICROPHONE,
+		section: "voice",
+		title: "Microphone Input",
+		description: "Select which audio input device to use for voice capture",
+		keywords: [
+			"voice",
+			"microphone",
+			"mic",
+			"input",
+			"device",
+			"audio",
+			"samson",
+			"usb",
+			"capture",
+			"level",
+			"visualizer",
+		],
+	},
+	{
 		id: SETTING_ITEM_ID.VOICE_PROACTIVE,
 		section: "voice",
 		title: "Proactive Alerts",
@@ -809,6 +830,23 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
 			"provider",
 			"speech",
 			"quality",
+		],
+	},
+	{
+		id: SETTING_ITEM_ID.VOICE_SENSITIVITY,
+		section: "voice",
+		title: "Wake Word Sensitivity",
+		description:
+			"Adjust how easily the wake phrase is detected",
+		keywords: [
+			"voice",
+			"wake",
+			"word",
+			"sensitivity",
+			"threshold",
+			"detection",
+			"trigger",
+			"jarvis",
 		],
 	},
 	{

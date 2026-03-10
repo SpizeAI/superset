@@ -215,6 +215,7 @@ export const settings = sqliteTable("settings", {
 	voiceSttMode: text("voice_stt_mode"),
 	voiceWhisperModel: text("voice_whisper_model"),
 	voiceWakeWordSensitivity: real("voice_wake_word_sensitivity"),
+	voiceMicDeviceIndex: integer("voice_mic_device_index"),
 	voiceConversationTimeoutMs: integer("voice_conversation_timeout_ms"),
 	voiceCommandTimeoutMs: integer("voice_command_timeout_ms"),
 	voiceTraceEnabled: integer("voice_trace_enabled", { mode: "boolean" }),

@@ -386,7 +386,10 @@ export class VoiceAgent {
 			);
 		}
 
-		return response.json();
+		return response.json() as Promise<{
+			content: ClaudeContentBlock[];
+			stop_reason: string;
+		}>;
 	}
 
 	private async executeTool(

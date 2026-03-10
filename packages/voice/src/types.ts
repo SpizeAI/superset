@@ -37,11 +37,17 @@ export interface ProactiveAlert {
 export type WhisperModel = "base.en" | "small.en";
 export type TtsProvider = "elevenlabs" | "macos";
 export type SttMode = "batch" | "streaming";
+export type WakeEngine = "porcupine" | "openwakeword" | "vad_fallback";
 
 export interface VoiceConfig {
 	enabled: boolean;
 	proactiveAlerts: boolean;
+	wakeEngine: WakeEngine;
 	wakeWordSensitivity: number;
+	/** openWakeWord model name/path (only used when wakeEngine is "openwakeword") */
+	openWakeWordModel: string;
+	/** PvRecorder device index (-1 = system default) */
+	micDeviceIndex: number;
 	whisperModel: WhisperModel;
 	conversationTimeoutMs: number;
 	commandTimeoutMs: number;

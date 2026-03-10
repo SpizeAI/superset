@@ -205,9 +205,71 @@ function validateNativeModulesPrepared(): void {
 	}
 }
 
+function validateVoiceRuntimePrepared(): void {
+	const targetPlatform = process.env.TARGET_PLATFORM || process.platform;
+	if (targetPlatform !== "darwin") {
+		console.log(
+			`[validate:native-runtime] Skipping voice native checks for ${targetPlatform}`,
+		);
+		return;
+	}
+
+	const nodeModulesDir = join(projectRoot, "node_modules");
+	const requiredVoiceModules = [
+		"@picovoice/pvrecorder-node/package.json",
+		"@picovoice/porcupine-node/package.json",
+		"whisper-node/package.json",
+	];
+	for (const modulePath of requiredVoiceModules) {
+		assertExists(
+			join(nodeModulesDir, modulePath),
+			"Required voice runtime dependency is missing.",
+		);
+	}
+
+	const whisperCppDir = join(nodeModulesDir, "whisper-node", "lib", "whisper.cpp");
+	assertExists(
+		whisperCppDir,
+		"whisper.cpp runtime directory missing from whisper-node.",
+	);
+
+	const hasWhisperBinary = ["main", "main.exe"].some((entry) =>
+		existsSync(join(whisperCppDir, entry)),
+	);
+	if (!hasWhisperBinary) {
+		fail(
+			[
+				"whisper.cpp binary missing from whisper-node runtime package.",
+				`Checked: ${join(whisperCppDir, "main")} and ${join(whisperCppDir, "main.exe")}`,
+			].join("\n"),
+		);
+	}
+
+	const modelsDir = join(whisperCppDir, "models");
+	assertExists(
+		modelsDir,
+		"whisper.cpp models directory missing. Run model download before packaging.",
+	);
+	const hasGgmlModel = readdirSync(modelsDir).some(
+		(entry) => entry.startsWith("ggml-") && entry.endsWith(".bin"),
+	);
+	if (!hasGgmlModel) {
+		fail(
+			[
+				"No whisper.cpp GGML model found in runtime models directory.",
+				`Checked: ${modelsDir}`,
+				"Run `npx whisper-node download base.en` and re-run copy:native-modules.",
+			].join("\n"),
+		);
+	}
+
+	console.log("[validate:native-runtime] OK: voice native runtime modules present");
+}
+
 function main(): void {
 	validateLibsqlNotBundled();
 	validateNativeModulesPrepared();
+	validateVoiceRuntimePrepared();
 	console.log("[validate:native-runtime] All checks passed");
 }
 

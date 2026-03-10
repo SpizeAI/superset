@@ -32,7 +32,7 @@ export class MacOsFallbackSpeaker {
 						this.currentProcess = null;
 					}
 					if (error) {
-						if ((error as NodeJS.ErrnoException).signal === "SIGTERM") {
+						if ((error as NodeJS.ErrnoException & { signal?: string }).signal === "SIGTERM") {
 							resolve();
 							return;
 						}

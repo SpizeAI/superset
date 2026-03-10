@@ -65,6 +65,13 @@ export class VoiceDaemon {
 		totalRequests: 0,
 	};
 
+	private getCommandTimeoutMs(): number {
+		const config = this.deps.getConfig();
+		return Number.isFinite(config.commandTimeoutMs) && config.commandTimeoutMs > 0
+			? config.commandTimeoutMs
+			: DEFAULT_VOICE_CONFIG.commandTimeoutMs;
+	}
+
 	constructor(deps: VoiceDaemonDeps) {
 		this.deps = deps;
 		this.pipeline = new VoicePipeline();
@@ -72,6 +79,19 @@ export class VoiceDaemon {
 		this.alertEvaluator = new AlertEvaluator();
 		this.fallbackHandler = new FallbackHandler();
 	}
+
+	/**
+	 * Wire voice agent tools into the daemon.
+	 * Must be called before start() for tools to be available.
+	 */
+	setTools(tools: import("@superset/voice").VoiceAgentTools): void {
+		this.tools = tools;
+		if (this.agent) {
+			this.agent.setTools(tools);
+		}
+	}
+
+	private tools: import("@superset/voice").VoiceAgentTools | null = null;
 
 	async start(): Promise<void> {
 		if (this.running) return;
@@ -91,6 +111,10 @@ export class VoiceDaemon {
 				traceMaxEntries: config.voiceTraceMaxEntries,
 				traceTtlMs: config.voiceTraceTtlMs,
 			});
+			// Wire tools if they were set before start()
+			if (this.tools) {
+				this.agent.setTools(this.tools);
+			}
 		}
 
 		try {
@@ -119,9 +143,7 @@ export class VoiceDaemon {
 		this.pipeline.onEvent((event, data) => {
 			if (event === "state-change") {
 				const { to } = data as { from: string; to: string };
-				for (const listener of this.statusListeners) {
-					listener(to);
-				}
+				this.emitStatus(to);
 			}
 			if (event === "response-ready") {
 				const response = data as VoiceAgentResponse;
@@ -204,6 +226,48 @@ export class VoiceDaemon {
 		return this.traceKillSwitch;
 	}
 
+	/**
+	 * Send a text command directly to the voice agent, bypassing mic/wake/STT.
+	 * Used as a fallback input path when native audio capture is unavailable.
+	 */
+	async sendCommand(text: string): Promise<{ response: string; executionPath: string }> {
+		if (!this.running) {
+			return { response: "Voice daemon is not running.", executionPath: "fallback" };
+		}
+
+		const command = text.trim();
+		if (!command) {
+			return {
+				response: "Command text cannot be empty.",
+				executionPath: "fallback",
+			};
+		}
+
+		try {
+			console.log(`[voice:daemon] Manual command: "${command}"`);
+			this.emitStatus("thinking");
+
+			const result = await withTimeout(
+				this.handleUtterance(command, []),
+				this.getCommandTimeoutMs(),
+				"Manual command timed out",
+			);
+
+			this.emitStatus("speaking");
+
+			// Speak the response via TTS
+			await this.deps.speak(result.text);
+
+			this.emitStatus(this.getState());
+
+			return { response: result.text, executionPath: result.executionPath };
+		} catch (error) {
+			this.emitStatus(this.getState());
+			const msg = error instanceof Error ? error.message : String(error);
+			return { response: `Error: ${msg}`, executionPath: "fallback" };
+		}
+	}
+
 	private async handleUtterance(
 		text: string,
 		conversationContext: string[],
@@ -214,10 +278,10 @@ export class VoiceDaemon {
 		// Try Claude agent first, fall back to pattern matcher
 		if (this.agent) {
 			try {
-				const response = await this.agent.processUtterance(
-					text,
-					conversationContext,
-					cachedState,
+				const response = await withTimeout(
+					this.agent.processUtterance(text, conversationContext, cachedState),
+					this.getCommandTimeoutMs(),
+					"Voice agent timed out",
 				);
 				this.recordExecutionPath(response.executionPath);
 				return response;
@@ -226,12 +290,33 @@ export class VoiceDaemon {
 					"[voice:daemon] Claude agent failed, using fallback:",
 					error,
 				);
+				const response = await withTimeout(
+					this.fallbackHandler.processUtterance(text, cachedState, {
+						reason: "service-unavailable",
+					}),
+					this.getCommandTimeoutMs(),
+					"Fallback handler timed out",
+				);
+				this.recordExecutionPath(response.executionPath);
+				return response;
 			}
 		}
 
-		const response = await this.fallbackHandler.processUtterance(text, cachedState);
+		const response = await withTimeout(
+			this.fallbackHandler.processUtterance(text, cachedState, {
+				reason: "no-credentials",
+			}),
+			this.getCommandTimeoutMs(),
+			"Fallback handler timed out",
+		);
 		this.recordExecutionPath(response.executionPath);
 		return response;
+	}
+
+	private emitStatus(state: string): void {
+		for (const listener of this.statusListeners) {
+			listener(state);
+		}
 	}
 
 	private recordExecutionPath(path: ExecutionPath): void {
@@ -252,4 +337,26 @@ export class VoiceDaemon {
 		if (!this.running) return;
 		this.pipeline.handleProactiveAlert(alert);
 	}
+}
+
+function withTimeout<T>(
+	promise: Promise<T>,
+	timeoutMs: number,
+	message: string,
+): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timeout = setTimeout(() => {
+			reject(new Error(message));
+		}, timeoutMs);
+
+		promise
+			.then((value) => {
+				clearTimeout(timeout);
+				resolve(value);
+			})
+			.catch((error) => {
+				clearTimeout(timeout);
+				reject(error);
+			});
+	});
 }

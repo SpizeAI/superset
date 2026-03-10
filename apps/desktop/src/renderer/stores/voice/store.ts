@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { electronTrpc } from "renderer/lib/electron-trpc";
@@ -50,15 +51,20 @@ export const useVoiceStore = create<VoiceState>()(
 /**
  * Hook to sync voice pipeline state from the main process via tRPC subscription.
  * Call this once in a top-level component.
+ *
+ * Uses a stable options ref to prevent useSubscription from restarting
+ * on every render (which would cause an infinite re-render loop since
+ * the initial emit triggers a state update → re-render → new options → restart).
  */
 export function useVoiceSync() {
 	const setPipelineState = useVoiceStore((state) => state.setPipelineState);
-
-	electronTrpc.voice.status.useSubscription(undefined, {
-		onData: (event) => {
+	const optionsRef = useRef({
+		onData: (event: { state: string }) => {
 			setPipelineState(event.state);
 		},
 	});
+
+	electronTrpc.voice.status.useSubscription(undefined, optionsRef.current);
 }
 
 // Convenience hooks
